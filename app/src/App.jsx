@@ -1,57 +1,84 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import './index.css';
 
-// --- MOCK DATA --- //
-const MOCK_CRITERIA = [
-  { id: 'c1', type: 'Financial', desc: 'Minimum Turnover > ₹5 Cr', mandatory: true },
-  { id: 'c2', type: 'Technical', desc: '3 similar projects in 5 yrs', mandatory: true },
-  { id: 'c3', type: 'Compliance', desc: 'ISO 9001:2015 Certification', mandatory: false },
-];
-
+// We'll keep initial bidders to represent the files we will process against the API
 const INITIAL_BIDDERS = [
-  { 
-    id: 'b1', name: 'Alpha Buildworks Ltd', 
-    eval: { 
-      'c1': { status: 'green', val: '₹6.2 Cr', doc: 'CA_Cert.pdf' },
-      'c2': { status: 'green', val: '4 Projects Found', doc: 'Work_Orders.zip' },
-      'c3': { status: 'green', val: 'Target ISO Found', doc: 'ISO_Alpha.pdf' }
-    }
-  },
-  { 
-    id: 'b2', name: 'Omega Construct', 
-    eval: { 
-      'c1': { status: 'yellow', val: '₹480 Mn(?)', doc: 'Scanned_P&L.png', ambiguity: 'Currency unit "Mn" mixed with "Lakhs". OCR confidence low due to scan quality.' },
-      'c2': { status: 'green', val: '3 Projects Found', doc: 'Contracts.pdf' },
-      'c3': { status: 'red', val: 'ISO 9001:2008 (Expired)', doc: 'ISO_Old_Omega.pdf' }
-    }
-  },
-  { 
-    id: 'b3', name: 'Prime EPC', 
-    eval: { 
-      'c1': { status: 'green', val: '₹12.5 Cr', doc: 'Audit_Report.pdf' },
-      'c2': { status: 'red', val: '1 Project Found', doc: 'Experience_Lr.pdf' },
-      'c3': { status: 'green', val: 'Valid ISO 9001:2015', doc: 'ISO_Prime_24.png' }
-    }
-  }
+  { id: 'b1', name: 'Alpha Buildworks Ltd', eval: {} },
+  { id: 'b2', name: 'Omega Construct', eval: {} },
+  { id: 'b3', name: 'Prime EPC', eval: {} }
 ];
 
 function App() {
   const [appState, setAppState] = useState('DASHBOARD'); // DASHBOARD, UPLOADING, PROCESSING, EVAL_VIEW
+  const [criteriaList, setCriteriaList] = useState([]);
   const [bidders, setBidders] = useState(INITIAL_BIDDERS);
-  const [hitlData, setHitlData] = useState(null); // Data for Human-in-the-Loop Modal
+  const [hitlData, setHitlData] = useState(null);
 
-  const handleTenderUpload = () => {
+  const fileInputRef = useRef(null);
+
+  const onUploadClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleTenderUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
     setAppState('UPLOADING');
-    setTimeout(() => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      // 1. Extract Criteria
+      const res = await fetch('http://localhost:8000/api/upload-tender', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      
+      let currentCriteria = [];
+      if (data.criteria) {
+        currentCriteria = data.criteria;
+        setCriteriaList(currentCriteria);
+      }
+
       setAppState('PROCESSING');
-      setTimeout(() => {
-        setAppState('EVAL_VIEW');
-      }, 3000); // simulate parsing
-    }, 800);
+      
+      // 2. Process Bidders (Simulating uploading bidder docs one by one)
+      const updatedBidders = [...INITIAL_BIDDERS];
+      for (let i = 0; i < updatedBidders.length; i++) {
+        const bidder = updatedBidders[i];
+        
+        // We will send a mock file just to trigger the backend logic (using the bidder name to drive mock or real AI logic)
+        const bidderFormData = new FormData();
+        const dummyBlob = new Blob(["dummy bidder content"], { type: "application/pdf" });
+        bidderFormData.append('file', dummyBlob, `Bidder_${bidder.name.split(' ')[0]}.pdf`);
+        bidderFormData.append('bidder_name', bidder.name);
+        bidderFormData.append('criteria', JSON.stringify(currentCriteria));
+
+        const evalRes = await fetch('http://localhost:8000/api/evaluate-bidder', {
+          method: 'POST',
+          body: bidderFormData
+        });
+        const evalData = await evalRes.json();
+        
+        if (evalData.eval) {
+          bidder.eval = evalData.eval;
+        }
+      }
+      
+      setBidders(updatedBidders);
+      setAppState('EVAL_VIEW');
+
+    } catch (err) {
+      console.error(err);
+      alert("Error processing tender. Ensure backend is running at :8000");
+      setAppState('DASHBOARD');
+    }
   };
 
   const openHitlModal = (bidderName, crit, evalData) => {
-    if(evalData.status !== 'yellow') return; // Only open for yellow items in this demo
+    if(evalData.status !== 'yellow') return;
     setHitlData({ bidderName, crit, evalData });
   };
 
@@ -79,8 +106,9 @@ function App() {
   const handleExportCSV = () => {
     let csvStr = "Tender,Bidder Name,Criterion,Verdict,Value Found,Source Document\n";
     bidders.forEach(b => {
-      MOCK_CRITERIA.forEach(c => {
+      criteriaList.forEach(c => {
         const ev = b.eval[c.id];
+        if(!ev) return;
         let verdict = ev.status === 'green' ? 'Eligible' : (ev.status === 'red' ? 'Ineligible' : 'Needs Review');
         let safeVal = ev.val.replace(/,/g, ''); 
         let safeName = b.name.replace(/,/g, '');
@@ -100,7 +128,6 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* NAVBAR */}
       <nav className="navbar">
         <div className="navbar-brand" style={{cursor: 'pointer'}} onClick={() => setAppState('DASHBOARD')}>
           <div style={{width: 32, height: 32, background: 'var(--accent-blue)', borderRadius: 6}}></div>
@@ -112,7 +139,6 @@ function App() {
         </div>
       </nav>
 
-      {/* MAIN CONTENT */}
       <main className="main-content">
         
         {appState === 'DASHBOARD' && (
@@ -123,7 +149,14 @@ function App() {
             <div className="dashboard-grid">
               <div className="glass-panel">
                 <h3 style={{marginBottom: 20}}>Start New Evaluation</h3>
-                <div className="upload-zone" onClick={handleTenderUpload}>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  style={{ display: 'none' }} 
+                  accept=".pdf,.docx" 
+                  onChange={handleTenderUpload} 
+                />
+                <div className="upload-zone" onClick={onUploadClick}>
                   <div className="upload-icon">📄</div>
                   <h3>Upload Tender PDF</h3>
                   <p style={{color: 'var(--text-secondary)', fontSize: '0.85rem'}}>Supported: PDF, DOCX (Max 50MB)</p>
@@ -145,7 +178,7 @@ function App() {
         {(appState === 'UPLOADING' || appState === 'PROCESSING') && (
           <div className="fade-in" style={{textAlign: 'center', marginTop: 100}}>
             <h2 className="accent-gradient-text" style={{fontSize: '2rem', marginBottom: 20}}>
-              {appState === 'UPLOADING' ? 'Ingesting Documents...' : 'Multimodal Parser is Running...'}
+              {appState === 'UPLOADING' ? 'Ingesting Documents via FastAPI...' : 'Multimodal Parser is Running...'}
             </h2>
             <div style={{maxWidth: 400, margin: '0 auto'}}>
               <div className="scanning-bar"></div>
@@ -165,7 +198,7 @@ function App() {
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30}}>
               <div>
                 <h2>Evaluation Matrix: <span style={{color: 'var(--text-secondary)', fontWeight: 400}}>Tender CRPF-2026-X</span></h2>
-                <p style={{color: 'var(--text-secondary)', marginTop: 4}}>Extracted {MOCK_CRITERIA.length} criteria. Analysed {bidders.length} Bidders.</p>
+                <p style={{color: 'var(--text-secondary)', marginTop: 4}}>Extracted {criteriaList.length} criteria. Analysed {bidders.length} Bidders.</p>
               </div>
               <div>
                 <button className="btn btn-outline" style={{marginRight: 10}} onClick={() => setAppState('DASHBOARD')}>← Back</button>
@@ -179,7 +212,7 @@ function App() {
                   <thead>
                     <tr>
                       <th style={{width: '20%'}}>Bidders</th>
-                      {MOCK_CRITERIA.map(c => (
+                      {criteriaList.map(c => (
                         <th key={c.id}>
                           <div style={{marginBottom: 8}}>{c.desc}</div>
                           <span className={`badge ${c.mandatory ? 'badge-mandatory' : 'badge-optional'}`}>
@@ -193,8 +226,9 @@ function App() {
                     {bidders.map(b => (
                       <tr key={b.id}>
                         <td style={{fontWeight: 600}}>{b.name}</td>
-                        {MOCK_CRITERIA.map(c => {
+                        {criteriaList.map(c => {
                           const ev = b.eval[c.id];
+                          if(!ev) return <td key={c.id}>-</td>;
                           return (
                             <td key={c.id}>
                               <div 
@@ -237,24 +271,6 @@ function App() {
                     <td>P. Officer (ID: 8091)</td>
                     <td><span className="badge badge-yellow">Audited</span></td>
                   </tr>
-                  <tr>
-                    <td style={{color: 'var(--text-secondary)'}}>Today, 10:40 AM</td>
-                    <td>Tender Analysis Complete (CRPF-2026-X)</td>
-                    <td>AI Engine (Gemini 1.5)</td>
-                    <td><span className="badge badge-green">Success</span></td>
-                  </tr>
-                  <tr>
-                    <td style={{color: 'var(--text-secondary)'}}>Today, 10:39 AM</td>
-                    <td>Document Uploaded (CRPF-2026-X.pdf)</td>
-                    <td>P. Officer (ID: 8091)</td>
-                    <td><span className="badge badge-green">Success</span></td>
-                  </tr>
-                  <tr>
-                    <td style={{color: 'var(--text-secondary)'}}>Yesterday, 14:15 PM</td>
-                    <td>System Backup Completed</td>
-                    <td>CRPF Automation</td>
-                    <td><span className="badge badge-green">Routine</span></td>
-                  </tr>
                 </tbody>
               </table>
             </div>
@@ -275,30 +291,12 @@ function App() {
                   <p style={{color: 'var(--text-secondary)', margin: '4px 0 0 0'}}>ID: 8091 • Level 4 Access</p>
                 </div>
               </div>
-              <div style={{display: 'grid', gap: 16}}>
-                <div style={{background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 8, border: '1px solid var(--glass-border)'}}>
-                  <div style={{color: 'var(--text-secondary)', fontSize: '0.85rem'}}>Full Name</div>
-                  <div style={{fontWeight: 500, marginTop: 4}}>Amit Sharma</div>
-                </div>
-                <div style={{background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 8, border: '1px solid var(--glass-border)'}}>
-                  <div style={{color: 'var(--text-secondary)', fontSize: '0.85rem'}}>Department Role</div>
-                  <div style={{fontWeight: 500, marginTop: 4}}>Senior Tender Evaluator, Cyber & IT</div>
-                </div>
-                <div style={{background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 8, border: '1px solid var(--glass-border)'}}>
-                  <div style={{color: 'var(--text-secondary)', fontSize: '0.85rem'}}>Digital Signature Status</div>
-                  <div style={{fontWeight: 500, marginTop: 4, color: 'var(--accent-emerald)'}}>✓ Active (Valid until 2027)</div>
-                </div>
-              </div>
-              <div style={{marginTop: 30}}>
-                <button className="btn btn-outline" style={{width: '100%', borderColor: 'var(--accent-rose)', color: 'var(--accent-rose)'}}>Sign Out Session</button>
-              </div>
             </div>
           </div>
         )}
 
       </main>
 
-      {/* Human-In-The-Loop Modal */}
       {hitlData && (
         <div className="modal-overlay">
           <div className="modal-content fade-in">
