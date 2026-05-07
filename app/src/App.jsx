@@ -203,7 +203,7 @@ function App() {
           <div className={`nav-item ${appState === 'DASHBOARD' || appState === 'UPLOADING' || appState === 'PROCESSING' ? 'active' : ''}`} onClick={() => setAppState('DASHBOARD')}>
             <Icons.Dashboard /> Dashboard
           </div>
-          <div className={`nav-item ${appState === 'EVAL_VIEW' ? 'active' : ''}`}>
+          <div className={`nav-item ${appState === 'EVAL_VIEW' ? 'active' : ''}`} onClick={() => setAppState('EVAL_VIEW')}>
             <Icons.Tenders /> Active Evaluations
           </div>
           <div className={`nav-item ${appState === 'SYSTEM_LOGS' ? 'active' : ''}`} onClick={() => setAppState('SYSTEM_LOGS')}>
