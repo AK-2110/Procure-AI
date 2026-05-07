@@ -1,4 +1,8 @@
 {
+  "buildCommand": "cd app && npm run build",
+  "installCommand": "cd app && npm install",
+  "outputDirectory": "app/dist",
+  "framework": "vite",
   "rewrites": [
     {
       "source": "/api/(.*)",
