@@ -41,7 +41,7 @@ function App() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const API_BASE_URL = import.meta.env.PROD ? '' : 'http://localhost:8000';
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/upload-tender`, {
