@@ -216,7 +216,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .main-content {
   padding: 40px;
-  max-width: 1600px;
+  max-width: 1200px; /* Reduced to center the content nicely */
   margin: 0 auto;
   width: 100%;
 }

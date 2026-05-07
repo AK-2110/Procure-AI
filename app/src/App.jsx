@@ -41,8 +41,10 @@ function App() {
     const formData = new FormData();
     formData.append('file', file);
 
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
     try {
-      const res = await fetch('http://localhost:8000/api/upload-tender', {
+      const res = await fetch(`${API_BASE_URL}/api/upload-tender`, {
         method: 'POST',
         body: formData
       });
@@ -64,7 +66,7 @@ function App() {
         bidderFormData.append('bidder_name', bidder.name);
         bidderFormData.append('criteria', JSON.stringify(currentCriteria));
 
-        const evalRes = await fetch('http://localhost:8000/api/evaluate-bidder', {
+        const evalRes = await fetch(`${API_BASE_URL}/api/evaluate-bidder`, {
           method: 'POST',
           body: bidderFormData
         });
